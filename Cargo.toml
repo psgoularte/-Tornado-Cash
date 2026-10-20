@@ -1,0 +1,34 @@
+[package]
+name = "tornado-mixer"
+version = "0.1.0"
+edition = "2021"
+description = "Blockchain-free Tornado Cash-style mixer for measuring withdrawal proof cost (LARC/USP research)"
+publish = false
+
+# All ark-* crates pinned to the same version.
+[dependencies]
+ark-ff = "=0.6.0"
+ark-ec = "=0.6.0"
+ark-std = "=0.6.0"
+ark-bn254 = "=0.6.0"
+ark-relations = "=0.6.0"
+ark-r1cs-std = "=0.6.0"
+# In 0.6 the `r1cs` feature (constraint gadgets) was renamed to `constraints`.
+ark-crypto-primitives = { version = "=0.6.0", features = ["constraints", "crh", "merkle_tree", "sponge"] }
+ark-groth16 = "=0.6.0"
+ark-snark = "=0.6.0"
+thiserror = "=2.0.21"
+
+[dev-dependencies]
+# rand and rand_chacha are deliberately pinned below the latest version (0.10):
+# arkworks 0.6 uses the rand_core 0.6 interface (via ark_std::rand), and only
+# rand 0.8 / rand_chacha 0.3 implement those traits. With the newer versions,
+# a ChaCha20Rng cannot be passed to the Groth16 setup or prover.
+# Do not upgrade. Check with `cargo tree -i rand_core` (a single version).
+rand = "=0.8.8"
+rand_chacha = "=0.3.1"
+criterion = "=0.8.2"
+
+[[bench]]
+name = "withdrawal_proof"
+harness = false

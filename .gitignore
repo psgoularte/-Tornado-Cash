@@ -1,0 +1,17 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo.lock is committed on purpose: measurements must be reproducible.
+
+# Profiling artifacts (perf, cargo-flamegraph)
+perf.data
+perf.data.old
+flamegraph.svg
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
