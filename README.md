@@ -44,3 +44,19 @@ cargo test --release
 ```sh
 cargo bench
 ```
+
+## Regenerating the Poseidon constants
+
+`src/hash/params.rs` is generated, not written by hand. It copies the width-3
+round constants and MDS matrix from circomlibjs' `poseidon_constants.json`,
+pinned to commit `48b3ab3`. To regenerate it (Python 3.8+, standard library
+only):
+
+```sh
+python scripts/generate_poseidon_params.py
+git diff src/hash/params.rs   # must be empty
+```
+
+The script downloads the source file, stops with an error if its SHA-256
+differs from the one recorded in `params.rs`, and rewrites the file. Use
+`--source <path>` to read a local copy instead of downloading.
