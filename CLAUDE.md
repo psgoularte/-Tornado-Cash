@@ -65,6 +65,7 @@ tests/        # integration tests per story
 - No `unwrap()` or `expect()` in library code; in tests it is fine.
 - Measurements and benchmarks always in `--release`.
 - Small, focused changes: one schedule task per branch and pull request.
+- **Every pull request references the issue it resolves** with `Closes #n` in its description. Each schedule task has an issue in the matching milestone; user stories are issues labeled `story`.
 - **Language.** Everything in the repository and on GitHub is written in English: code comments, documentation, test names, commit messages, pull requests.
 - Code must be portable: development happens on Windows and measurements on native Linux, so nothing platform-specific.
 
