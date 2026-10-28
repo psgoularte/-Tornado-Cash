@@ -27,7 +27,9 @@ The public inputs are allocated in the order of the table. The verifier receives
 
 ## Constraints
 
-Every constraint lists the story it serves, its cost in R1CS constraints and the negative tests that will cover it. A negative test builds a witness that is valid except for one tampered value, and checks that `cs.is_satisfied()` is `false`. The exception is C5, whose tests run at the verifier (see C5).
+The circuit is `circuit::WithdrawalCircuit` (`src/circuit/mod.rs`). Every constraint lists the story it serves, its cost in R1CS constraints and the negative tests in `tests/withdrawal_circuit.rs` that cover it. A negative test builds a witness that is valid except for one tampered value, and checks that the constraint system is not satisfied. The exception is C5, whose tests run at the verifier (see C5).
+
+Some invalid witnesses cannot be produced through `WithdrawalCircuit` itself, because the circuit derives the leaf from the nullifier and the secret. A real prover is not bound by our synthesis code: it can submit any assignment. For those cases, the test synthesizes a valid witness, extracts the R1CS matrices and the full assignment the same way the Groth16 prover does (`finalize`, then `to_matrices`), overwrites one witness value, and checks every row $(Az)_i (Bz)_i = (Cz)_i$.
 
 ### C1 — Commitment (US01, US02)
 
@@ -36,7 +38,7 @@ The leaf is the commitment of the note: the hash of the nullifier and the secret
 $$h_0 = H(\text{nullifier}, \text{secret})$$
 
 No equality is enforced here. $h_0$ is an intermediate value that C4 hashes up to the root, so a wrong note shows up as a root mismatch. Cost: one $H$.
-Negative test: `us02_rejects_wrong_secret` (the right path and root, but a different secret).
+Negative tests: `us02_rejects_wrong_secret` (the right path and root, but a different secret, so the leaf no longer matches) and `us02_rejects_note_not_in_tree`. These are end-to-end tests: they also pass if C1 is replaced by a free leaf witness, because an honest synthesis then still computes the wrong leaf. The test specific to C1 is `us02_rejects_secret_not_matching_commitment`. It keeps the real commitment as the leaf and changes only the secret's value in the R1CS assignment, so only C1 can fail.
 
 ### C2 — Nullifier hash (US02, US04)
 
@@ -45,14 +47,14 @@ The public nullifier hash is computed from the private nullifier, so the value t
 $$\text{nullifier\_hash} = H_N(\text{nullifier})$$
 
 Cost: one permutation, measured at 237 constraints (`tests/poseidon_gadget.rs`), plus one equality constraint. The state $[1, n, 0]$ has two constant elements, so two round-0 S-boxes are free.
-Negative tests: `us02_rejects_wrong_nullifier_hash` (the public value differs), `us02_rejects_wrong_nullifier` (the private nullifier differs, which also breaks C1 and C4).
+Negative tests: `us02_rejects_wrong_nullifier_hash` (the public value differs; only C2 can fail), `us02_rejects_wrong_nullifier` (the private nullifier differs, which also breaks C1 and C4) and `us02_rejects_nullifier_not_matching_nullifier_hash` (the nullifier's value changed in the R1CS assignment, which breaks C1 and C2).
 
 ### C3 — Direction bits are boolean (US02)
 
 $$b_i \cdot (1 - b_i) = 0 \qquad i = 0, \dots, d-1$$
 
 The path gadget (`tree::gadget::compute_root`) enforces it explicitly, one constraint per bit, so the bits are allocated as plain field variables. Keeping the check inside the gadget means the C4 selection never depends on the caller having allocated `Boolean`s. C4 relies on it for soundness (see C4).
-Negative test: `us02_rejects_non_boolean_direction_bit`. It allocates a bit with value 2 (or $-1$) directly.
+Negative test: `us02_rejects_non_boolean_direction_bit`. It builds the forgery that C3 prevents. For a note that is not in the tree, the level-0 bit is set to the value outside $\{0, 1\}$ that makes the selected pair equal the real pair (leaf 0, leaf 1). Every hash and the root then match, and only C3 fails. The path gadget test `us02_path_gadget_rejects_non_boolean_direction_bit` also tries bits 2 and $-1$ at every level.
 
 ### C4 — The path reaches the public root (US02)
 
@@ -72,7 +74,7 @@ Negative tests: `us02_rejects_wrong_sibling`, `us02_rejects_flipped_direction_bi
 
 $$\text{recipient}^2 = q_1, \qquad \text{relayer}^2 = q_2, \qquad \text{fee}^2 = q_3$$
 
-$q_1, q_2, q_3$ are private witnesses that no other constraint uses. Cost: 3 constraints. These constraints hold for any value of the inputs, so no tampered witness can fail them. Following the project rule for such binding constraints (CLAUDE.md), their negative tests run at the verifier: a proof generated for one value must be rejected by `Groth16::verify` when that public input is replaced. The tests are `us05_rejects_other_recipient`, `us05_rejects_other_relayer` and `us05_rejects_other_fee`.
+$q_1, q_2, q_3$ are private witnesses that no other constraint uses. Cost: 3 constraints. These constraints hold for any value of the inputs, so no tampered witness can fail them. Following the project rule for such binding constraints (CLAUDE.md), their negative tests run at the verifier: a proof generated for one value must be rejected by `Groth16::verify` when that public input is replaced. The tests are `us05_rejects_other_recipient`, `us05_rejects_other_relayer` and `us05_rejects_other_fee`. They need proof generation and are part of issue #21.
 
 ## Why C5 is needed
 
@@ -107,7 +109,7 @@ The estimate uses measured costs: `hash2` costs 240 constraints and $H_N$ costs 
 
 In general the total is $(d + 1)\cdot 240 + 237 + 2d + 5 = 242d + 482$. Poseidon accounts for $21 \cdot 240 + 237 = 5{,}277$ constraints, or 99.2% of the total at $d = 20$.
 
-The parts are measured, but the total must still be confirmed by a test that asserts `cs.num_constraints()` on the full circuit, once the circuit exists.
+The total is confirmed on the implemented circuit: `us02_withdrawal_circuit_constraint_count` measures **5,322** constraints at $d = 20$, exactly the sum above, and $242d + 482$ at $d = 3$. The circuit has 6 instance variables (the constant 1 and the 5 public inputs).
 
 ### Observation for the measurement phase: FFT domain
 
