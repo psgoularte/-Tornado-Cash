@@ -10,6 +10,7 @@ use ark_r1cs_std::fields::{fp::FpVar, FieldVar};
 use ark_relations::gr1cs::SynthesisError;
 
 use super::params::{FULL_ROUNDS, MDS, PARTIAL_ROUNDS, ROUND_CONSTANTS, WIDTH};
+use super::NULLIFIER_DOMAIN;
 
 /// Applies the Poseidon permutation to a width-3 state of circuit variables.
 ///
@@ -47,6 +48,17 @@ pub fn permute(mut state: [FpVar<Fr>; WIDTH]) -> Result<[FpVar<Fr>; WIDTH], Synt
 /// costs 243.
 pub fn hash2(left: &FpVar<Fr>, right: &FpVar<Fr>) -> Result<FpVar<Fr>, SynthesisError> {
     let [out, _, _] = permute([FpVar::zero(), left.clone(), right.clone()])?;
+    Ok(out)
+}
+
+/// In-circuit nullifier hash `H_N(n)`; matches `native::nullifier_hash`.
+///
+/// The state starts as `[NULLIFIER_DOMAIN, nullifier, 0]`. Two of its three
+/// elements are constants, so two round-0 S-boxes are free: one call costs
+/// 237 constraints (79 S-boxes on variables times 3).
+pub fn nullifier_hash(nullifier: &FpVar<Fr>) -> Result<FpVar<Fr>, SynthesisError> {
+    let domain = FpVar::Constant(Fr::from(NULLIFIER_DOMAIN));
+    let [out, _, _] = permute([domain, nullifier.clone(), FpVar::zero()])?;
     Ok(out)
 }
 

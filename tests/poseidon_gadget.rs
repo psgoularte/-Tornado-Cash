@@ -18,6 +18,10 @@ const PERMUTATION_CONSTRAINTS: usize = 243;
 /// 0, so its round-0 S-box costs nothing; 80 S-boxes x 3 = 240.
 const HASH2_CONSTRAINTS: usize = 240;
 
+/// Constraints of one in-circuit nullifier hash: the state starts as
+/// [1, n, 0], so two round-0 S-boxes act on constants; 79 S-boxes x 3 = 237.
+const NULLIFIER_HASH_CONSTRAINTS: usize = 237;
+
 /// Allocates `left` and `right` as witnesses and returns the gadget output.
 fn gadget_hash2(cs: &ConstraintSystemRef<Fr>, left: Fr, right: Fr) -> FpVar<Fr> {
     let left = FpVar::new_witness(cs.clone(), || Ok(left)).expect("allocate left");
@@ -100,4 +104,77 @@ fn us02_poseidon_permutation_constraint_count() {
     let _out = gadget::permute(state).expect("gadget permute");
 
     assert_eq!(cs.num_constraints(), PERMUTATION_CONSTRAINTS);
+}
+
+/// Allocates `nullifier` as a witness and returns the gadget nullifier hash.
+fn gadget_nullifier_hash(cs: &ConstraintSystemRef<Fr>, nullifier: Fr) -> FpVar<Fr> {
+    let nullifier = FpVar::new_witness(cs.clone(), || Ok(nullifier)).expect("allocate nullifier");
+    gadget::nullifier_hash(&nullifier).expect("gadget nullifier hash")
+}
+
+#[test]
+fn us04_nullifier_hash_gadget_matches_native() {
+    let mut rng = ChaCha20Rng::seed_from_u64(2027);
+
+    for _ in 0..100 {
+        let nullifier = Fr::rand(&mut rng);
+        let cs = ConstraintSystem::<Fr>::new_ref();
+        let out = gadget_nullifier_hash(&cs, nullifier);
+
+        assert_eq!(
+            out.value().expect("output value"),
+            hash::nullifier_hash(nullifier)
+        );
+        assert!(cs.is_satisfied().expect("satisfiability check"));
+    }
+}
+
+#[test]
+fn us04_nullifier_hash_is_separated_from_hash2() {
+    let mut rng = ChaCha20Rng::seed_from_u64(2028);
+    let nullifiers = [0u64, 1, 2, 123456789]
+        .map(Fr::from)
+        .into_iter()
+        .chain((0..100).map(|_| Fr::rand(&mut rng)));
+
+    for nullifier in nullifiers {
+        let tagged = hash::nullifier_hash(nullifier);
+        assert_ne!(
+            tagged,
+            hash::hash2(nullifier, Fr::from(0u64)),
+            "n = {nullifier}"
+        );
+
+        let cs = ConstraintSystem::<Fr>::new_ref();
+        let out = gadget_nullifier_hash(&cs, nullifier);
+        let untagged = gadget_hash2(&cs, nullifier, Fr::from(0u64));
+        assert_ne!(
+            out.value().expect("output value"),
+            untagged.value().expect("output value"),
+            "n = {nullifier}"
+        );
+    }
+}
+
+#[test]
+fn us04_nullifier_hash_gadget_rejects_wrong_output() {
+    let nullifier = Fr::from(1u64);
+    let correct = hash::nullifier_hash(nullifier);
+
+    for (claimed, satisfied) in [(correct, true), (correct + Fr::from(1u64), false)] {
+        let cs = ConstraintSystem::<Fr>::new_ref();
+        let out = gadget_nullifier_hash(&cs, nullifier);
+        let claimed = FpVar::new_input(cs.clone(), || Ok(claimed)).expect("allocate claim");
+        out.enforce_equal(&claimed).expect("enforce equal");
+
+        assert_eq!(cs.is_satisfied().expect("satisfiability check"), satisfied);
+    }
+}
+
+#[test]
+fn us02_nullifier_hash_gadget_constraint_count() {
+    let cs = ConstraintSystem::<Fr>::new_ref();
+    let _out = gadget_nullifier_hash(&cs, Fr::from(1u64));
+
+    assert_eq!(cs.num_constraints(), NULLIFIER_HASH_CONSTRAINTS);
 }
