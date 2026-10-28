@@ -44,7 +44,7 @@ Do not change these parameters without asking.
 src/
   lib.rs
   hash/       # Poseidon outside the circuit (native) and inside it (gadget)
-  tree/       # deposit tree, paths, root history
+  tree/       # deposit tree and paths (the root history belongs to the mixer)
   note.rs     # note, commitment, nullifier hash
   circuit/    # withdrawal circuit (ConstraintSynthesizer)
   prover/     # setup, proof generation and verification
