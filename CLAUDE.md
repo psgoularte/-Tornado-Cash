@@ -59,7 +59,7 @@ tests/        # integration tests per story
 - **Own implementation.** Do not copy code from other mixers (for example, arkworks-gadgets from the Webb project). You may consult them to understand design decisions, but the code in this repository must be written here.
 - **Do not invent test vectors.** For Poseidon, use parameters and reference vectors from a cited source (for example, the circomlib tests) and record the source in a comment. If you do not have the source, stop and ask.
 - **Native and in-circuit must match.** Every function implemented in both places (hash, path, commitment) has an equivalence test.
-- **A negative test for each constraint.** For each circuit constraint, a test shows that invalid inputs do not satisfy the circuit.
+- **A negative test for each constraint.** For each circuit constraint, a test shows that invalid inputs do not satisfy the circuit. Exception: binding constraints that any input satisfies (such as x² = q) are tested at the verifier, showing that the proof is rejected when the public input is replaced.
 - **Test names carry the story ID:** `us04_rejects_repeated_nullifier`, `us06_rejects_root_outside_history`.
 - **The prover must be instrumentable.** The research will separately measure constraint synthesis, witness generation, polynomial transforms and each MSM. Keep these steps separable and do not hide proof generation behind abstractions that prevent this.
 - No `unwrap()` or `expect()` in library code; in tests it is fine.
