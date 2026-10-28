@@ -4,7 +4,7 @@
 
 use ark_bn254::Fr;
 use ark_ff::MontFp;
-use tornado_mixer::hash::{hash2, permute};
+use tornado_mixer::hash::{hash2, nullifier_hash, permute};
 
 // circomlib, test/poseidoncircuit.js, "Should check constrain of hash([1, 2]) t=3":
 // https://github.com/iden3/circomlib/blob/35e54ea21da3e8762557234298dbb553c175ea8d/test/poseidoncircuit.js
@@ -49,4 +49,51 @@ fn us01_poseidon_permutation_state_matches_circomlibjs() {
         MontFp!("7142104613055408817911962100316808866448378443474503659992478482890339429929"),
     ];
     assert_eq!(state[..2], expected);
+}
+
+// Nullifier hash H_N(n) = Poseidon of the state [1, n, 0] (decision D1).
+// circomlibjs publishes no width-3 vector with a non-zero initial state, so
+// these values were produced by running circomlibjs' own implementation,
+// poseidon([n, 0], 1), at commit 48b3ab37013c5ed21e9ff8a80a5b010795c97094
+// (the same commit as the constants in src/hash/params.rs):
+// https://github.com/iden3/circomlibjs/blob/48b3ab37013c5ed21e9ff8a80a5b010795c97094/src/poseidon_reference.js
+// Command: `node scripts/nullifier_hash_vectors.mjs <path to circomlibjs>`
+// (installation steps in the script header). The script first checks that
+// circomlibjs reproduces two published vectors, one of them with an initial
+// state, and requires its reference, optimized and wasm implementations to
+// agree on every value below.
+#[test]
+fn us04_nullifier_hash_matches_circomlibjs_with_initial_state() {
+    let vectors: [(Fr, Fr); 5] = [
+        (
+            MontFp!("0"),
+            MontFp!("6728884524783278352701962419612726171407918527066264154829676679182488395286"),
+        ),
+        (
+            MontFp!("1"),
+            MontFp!("415600613235378359744539731387103727073144920510400543186315443896602800829"),
+        ),
+        (
+            MontFp!("2"),
+            MontFp!(
+                "19928211794257771485102269587486881376606572650317269981454285080979503847156"
+            ),
+        ),
+        (
+            MontFp!("123456789"),
+            MontFp!(
+                "16833478348948103367746408098071931045374119346370171770387198897189550487551"
+            ),
+        ),
+        (
+            MontFp!(
+                "21888242871839275222246405745257275088548364400416034343698204186575808495616"
+            ),
+            MontFp!("375476029929284139926554489095330350743170095663101439724742927625530494406"),
+        ),
+    ];
+
+    for (nullifier, expected) in vectors {
+        assert_eq!(nullifier_hash(nullifier), expected, "n = {nullifier}");
+    }
 }

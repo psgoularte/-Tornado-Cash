@@ -4,6 +4,7 @@ use ark_bn254::Fr;
 use ark_ff::{AdditiveGroup, Field};
 
 use super::params::{FULL_ROUNDS, MDS, PARTIAL_ROUNDS, ROUND_CONSTANTS, WIDTH};
+use super::NULLIFIER_DOMAIN;
 
 /// Applies the Poseidon permutation to a width-3 state.
 ///
@@ -39,6 +40,18 @@ pub fn permute(mut state: [Fr; WIDTH]) -> [Fr; WIDTH] {
 /// and the internal nodes of the deposit tree.
 pub fn hash2(left: Fr, right: Fr) -> Fr {
     permute([Fr::ZERO, left, right])[0]
+}
+
+/// Nullifier hash `H_N(n)`: the Poseidon permutation of the state
+/// `[NULLIFIER_DOMAIN, nullifier, 0]`, output is the first element.
+///
+/// The capacity element carries the domain tag, so no inputs can make this
+/// state equal to the `[0, a, b]` state of `hash2`: the nullifier hash is
+/// separated from commitments and tree nodes (decision D1 in
+/// `docs/withdrawal-circuit-spec.md`). Equal to circomlibjs'
+/// `poseidon([nullifier, 0], 1)`.
+pub fn nullifier_hash(nullifier: Fr) -> Fr {
+    permute([Fr::from(NULLIFIER_DOMAIN), nullifier, Fr::ZERO])[0]
 }
 
 /// S-box x -> x^5 (`params::ALPHA`), computed with two squarings and one

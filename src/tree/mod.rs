@@ -1,13 +1,14 @@
 //! Deposit tree.
 //!
 //! Incremental Merkle tree (depth 20 by default, configurable) whose leaves
-//! are the commitments, with Poseidon `hash2` nodes, leaf path generation and
-//! native path verification. The history of recent roots belongs to the
-//! mixer, not to the tree.
+//! are the commitments, with Poseidon `hash2` nodes, leaf path generation,
+//! native path verification and the in-circuit path gadget (`gadget`). The
+//! history of recent roots belongs to the mixer, not to the tree.
 //!
 //! Covers: US01 (insertion into the next free leaf, full tree) and US02 (path
 //! as private input of the withdrawal circuit).
 
+pub mod gadget;
 mod path;
 
 pub use path::MerklePath;

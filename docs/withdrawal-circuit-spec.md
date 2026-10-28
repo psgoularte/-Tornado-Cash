@@ -21,7 +21,7 @@ This document specifies the withdrawal circuit (`src/circuit/`) before it is imp
 | `nullifier` | private | $\mathbb{F}_r$ | Secret value of the note |
 | `secret` | private | $\mathbb{F}_r$ | Secret value of the note |
 | `siblings[0..d]` | private | $\mathbb{F}_r^{\,d}$ | Sibling node at each level of the leaf's path |
-| `bits[0..d]` | private | $\{0, 1\}^d$, allocated as `Boolean` | Direction at each level: $b_i = 0$ if the current node is the left child, $1$ if it is the right child. The bits are the leaf index in binary, least significant bit first |
+| `bits[0..d]` | private | $\{0, 1\}^d$, allocated as field elements and constrained by C3 | Direction at each level: $b_i = 0$ if the current node is the left child, $1$ if it is the right child. The bits are the leaf index in binary, least significant bit first |
 
 The public inputs are allocated in the order of the table. The verifier receives them in the same order.
 
@@ -44,15 +44,15 @@ The public nullifier hash is computed from the private nullifier, so the value t
 
 $$\text{nullifier\_hash} = H_N(\text{nullifier})$$
 
-Cost: one permutation (counted as 240, like $H$) plus one equality constraint.
+Cost: one permutation, measured at 237 constraints (`tests/poseidon_gadget.rs`), plus one equality constraint. The state $[1, n, 0]$ has two constant elements, so two round-0 S-boxes are free.
 Negative tests: `us02_rejects_wrong_nullifier_hash` (the public value differs), `us02_rejects_wrong_nullifier` (the private nullifier differs, which also breaks C1 and C4).
 
 ### C3 — Direction bits are boolean (US02)
 
 $$b_i \cdot (1 - b_i) = 0 \qquad i = 0, \dots, d-1$$
 
-This is enforced by `Boolean::new_witness`: one constraint per bit. C4 relies on it for soundness (see C4).
-Negative test: `us02_rejects_non_boolean_direction_bit`. It overwrites a bit's witness assignment with 2 after synthesis, because `Boolean` cannot hold 2.
+The path gadget (`tree::gadget::compute_root`) enforces it explicitly, one constraint per bit, so the bits are allocated as plain field variables. Keeping the check inside the gadget means the C4 selection never depends on the caller having allocated `Boolean`s. C4 relies on it for soundness (see C4).
+Negative test: `us02_rejects_non_boolean_direction_bit`. It allocates a bit with value 2 (or $-1$) directly.
 
 ### C4 — The path reaches the public root (US02)
 
@@ -92,31 +92,28 @@ Note on our stack: ark-groth16 0.6 (`LibsnarkReduction`, `src/r1cs_to_qap.rs`) a
 
 ## Constraint estimate
 
-The estimate uses the measured cost of `hash2` (240 constraints; `tests/poseidon_gadget.rs`) and the costs of the arkworks 0.6 gadgets: `Boolean::new_witness` is 1, a field multiplication is 1, `enforce_equal` is 1, and linear combinations are free.
+The estimate uses measured costs: `hash2` costs 240 constraints and $H_N$ costs 237 (`tests/poseidon_gadget.rs`). One path level costs 242: 240 for the hash, 1 for the selection and 1 for the boolean bit (`tests/path_gadget.rs`). It also uses the costs of the arkworks 0.6 gadgets: a field multiplication is 1, `enforce_equal` is 1, and linear combinations are free.
 
 | Part | Count | Cost each | Constraints |
 | --- | --- | --- | --- |
 | C1 commitment | 1 hash | 240 | 240 |
-| C2 nullifier hash | 1 hash + 1 equality | 240 + 1 | 241 |
+| C2 nullifier hash | 1 $H_N$ + 1 equality | 237 + 1 | 238 |
 | C3 booleanity | $d = 20$ bits | 1 | 20 |
 | C4 selection | $d = 20$ levels | 1 | 20 |
 | C4 level hashes | $d = 20$ hashes | 240 | 4,800 |
 | C4 root equality | 1 | 1 | 1 |
 | C5 binding | 3 squares | 1 | 3 |
-| **Total ($d = 20$)** | | | **5,325** |
+| **Total ($d = 20$)** | | | **5,322** |
 
-In general the total is $(d + 2)\cdot 240 + 2d + 5 = 242d + 485$. Poseidon accounts for $22 \cdot 240 = 5{,}280$ constraints, or 99.2% of the total at $d = 20$.
+In general the total is $(d + 1)\cdot 240 + 237 + 2d + 5 = 242d + 482$. Poseidon accounts for $21 \cdot 240 + 237 = 5{,}277$ constraints, or 99.2% of the total at $d = 20$.
 
-Caveats:
-
-- $H_N$ starts from $[1, n, 0]$, so two of its three round-0 S-boxes act on constants and are free. It may therefore measure 237 rather than 240. The table keeps 240 as an upper bound.
-- The estimate must be confirmed by a test that asserts `cs.num_constraints()`, as `tests/poseidon_gadget.rs` does for `hash2`.
+The parts are measured, but the total must still be confirmed by a test that asserts `cs.num_constraints()` on the full circuit, once the circuit exists.
 
 ### Observation for the measurement phase: FFT domain
 
-The QAP reduction adds one row per instance variable (the constant 1 plus the 5 public inputs) to the R1CS constraints. At $d = 20$ that is about $5{,}325 + 6 = 5{,}331$ rows. The evaluation domain is the next power of two, **8,192**, so about 35% of the domain (2,861 rows) is padding, and the polynomial transforms work on 8,192 points regardless.
+The QAP reduction adds one row per instance variable (the constant 1 plus the 5 public inputs) to the R1CS constraints. At $d = 20$ that is about $5{,}322 + 6 = 5{,}328$ rows. The evaluation domain is the next power of two, **8,192**, so about 35% of the domain (2,864 rows) is padding, and the polynomial transforms work on 8,192 points regardless.
 
-In general the domain has $242d + 491$ rows rounded up to a power of two:
+In general the domain has $242d + 488$ rows rounded up to a power of two:
 
 | Depth | Domain size |
 | --- | --- |
